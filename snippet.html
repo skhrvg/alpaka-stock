@@ -1,0 +1,93 @@
+<style>
+  .stock {
+    float: left;
+    width: 100%;
+    padding: 40px 20px;
+    font-family: 'TildaSans',Arial,sans-serif;
+  }
+  .stock > table {
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+  .stock > table th {
+    background-color: #eeeeee;
+  }
+  .stock > table td,
+  .stock > table th  {
+    text-align: center;
+    border-color: #eeeeee;
+    border-style: solid;
+    border-width: 1px;
+    padding: 8px;
+  }
+  .stock > table tr td:first-child {
+    background-color: #eeeeee;
+    text-align: left;
+  }
+  .stock > table tr td[data-in-stock='0'] {
+    color: #adadad;
+  }
+</style>
+<script>
+  (function () {
+    function t_ready(e) {
+      document.readyState !== 'loading'
+        ? e()
+        : document.addEventListener
+          ? document.addEventListener('DOMContentLoaded', e)
+          : document.attachEvent('onreadystatechange', () => {
+            document.readyState !== 'loading' && e()
+          })
+    }
+    t_ready(async () => {
+      function fetchStock(sku) {
+        return fetch(`http://localhost:3000/stock?${new URLSearchParams({ sku })}`)
+          .then((response) => {
+            return response.json()
+          })
+          .catch(() => {
+            return {}
+          })
+      }
+      function jsonToTable(json) {
+        const warehouses = Object.keys(json.warehouses)
+        const usedWarehouses = {}
+        const stock = json.stock
+        for (const size in stock) {
+          for (const warehouse of warehouses) {
+            if (stock[size][warehouse])
+              usedWarehouses[warehouse] = json.warehouses[warehouse]
+          }
+        }
+        let html = '<table><thead><tr><th></th>'
+        for (const warehouse in usedWarehouses)
+          html += `<th>${usedWarehouses[warehouse]}</th>`
+        html += '</tr></thead><tbody>'
+        for (const size in stock) {
+          let row = `<tr><td>${size}</td>`
+          for (const warehouse in usedWarehouses)
+            row += `<td data-in-stock="${stock[size][warehouse] || 0}">${stock[size][warehouse] || 0}</td>`
+          row += '</tr>'
+          html += row
+        }
+        html += '</tbody></table>'
+        return html
+      }
+
+      const skuMeta = document.querySelector('[itemprop=sku]')
+
+      if (skuMeta) {
+        const sku = skuMeta.textContent.trim()
+        const data = await fetchStock(sku)
+
+        if (!data?.stock || !Object.keys(data.stock).length)
+          return
+
+        const div = document.createElement('div')
+        div.className = 'stock'
+        div.innerHTML = jsonToTable(data)
+        document.querySelector('div.js-store-product.js-product.t-store__product-snippet > div.t-container').appendChild(div)
+      }
+    })
+  })()
+</script>
