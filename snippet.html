@@ -1,93 +1,117 @@
 <style>
-  .stock {
-    float: left;
-    width: 100%;
-    padding: 40px 20px;
-    font-family: 'TildaSans',Arial,sans-serif;
-  }
-  .stock > table {
-    border-collapse: collapse;
-    border-spacing: 0;
-  }
-  .stock > table th {
-    background-color: #eeeeee;
-  }
-  .stock > table td,
-  .stock > table th  {
-    text-align: center;
-    border-color: #eeeeee;
-    border-style: solid;
-    border-width: 1px;
-    padding: 8px;
-  }
-  .stock > table tr td:first-child {
-    background-color: #eeeeee;
-    text-align: left;
-  }
-  .stock > table tr td[data-in-stock='0'] {
-    color: #adadad;
-  }
+    .stock {
+        float: left;
+        width: 100%;
+        padding: 40px 20px;
+        font-size: 14px;
+        font-family: 'TildaSans',Arial,sans-serif;
+        overflow-x: auto;
+        box-sizing: border-box;
+    }
+    .stock > table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 8px;
+        overflow: hidden;
+        border: solid var(--brand-primary) 1px;
+        color: var(--brand-primary);
+        line-height: 24px;
+    }
+    .stock > table th {
+        background-color: var(--brand-primary);
+        color: #ffffff;
+        border-top: none;
+    }
+    .stock > table td,
+    .stock > table th  {
+        text-align: center;
+        padding: 8px;
+        white-space: nowrap;
+        border-left: solid var(--brand-primary) 1px;
+        border-top: solid var(--brand-primary) 1px;
+    }
+    .stock > table tr td:first-child,
+    .stock > table tr th:first-child {
+        text-align: left;
+        border-left: none;
+    }
+    .stock > table tr td[data-in-stock='0'] {
+        color: #adadad;
+    }
 </style>
 <script>
-  (function () {
-    function t_ready(e) {
-      document.readyState !== 'loading'
-        ? e()
-        : document.addEventListener
-          ? document.addEventListener('DOMContentLoaded', e)
-          : document.attachEvent('onreadystatechange', () => {
-            document.readyState !== 'loading' && e()
-          })
-    }
-    t_ready(async () => {
-      function fetchStock(sku) {
-        return fetch(`http://localhost:3000/stock?${new URLSearchParams({ sku })}`)
-          .then((response) => {
-            return response.json()
-          })
-          .catch(() => {
-            return {}
-          })
-      }
-      function jsonToTable(json) {
-        const warehouses = Object.keys(json.warehouses)
-        const usedWarehouses = {}
-        const stock = json.stock
-        for (const size in stock) {
-          for (const warehouse of warehouses) {
-            if (stock[size][warehouse])
-              usedWarehouses[warehouse] = json.warehouses[warehouse]
-          }
+    (function () {
+        function t_ready(e) {
+            document.readyState !== 'loading'
+                ? e()
+                : document.addEventListener
+                    ? document.addEventListener('DOMContentLoaded', e)
+                    : document.attachEvent('onreadystatechange', () => {
+                        document.readyState !== 'loading' && e()
+                    })
         }
-        let html = '<table><thead><tr><th></th>'
-        for (const warehouse in usedWarehouses)
-          html += `<th>${usedWarehouses[warehouse]}</th>`
-        html += '</tr></thead><tbody>'
-        for (const size in stock) {
-          let row = `<tr><td>${size}</td>`
-          for (const warehouse in usedWarehouses)
-            row += `<td data-in-stock="${stock[size][warehouse] || 0}">${stock[size][warehouse] || 0}</td>`
-          row += '</tr>'
-          html += row
-        }
-        html += '</tbody></table>'
-        return html
-      }
+        t_ready(async () => {
+            function fetchStock(sku) {
+                return fetch(`https://services.alpakastory.ru/stock?${new URLSearchParams({ sku })}`)
+                    .then((response) => {
+                        return response.json()
+                    })
+                    .catch(() => {
+                        return {}
+                    })
+            }
 
-      const skuMeta = document.querySelector('[itemprop=sku]')
+            function jsonToTable(json) {
+                const warehouses = Object.keys(json.warehouses)
+                const usedWarehouses = {}
+                const stock = Object.keys(json.stock).sort().reduce(
+                    (obj, key) => {
+                        obj[key] = json.stock[key];
+                        return obj;
+                    },
+                    {}
+                );
+                for (const size in stock) {
+                    for (const warehouse of warehouses) {
+                        if (stock[size][warehouse])
+                            usedWarehouses[warehouse] = json.warehouses[warehouse]
+                    }
+                }
+                let html = '<table><thead><tr><th></th>'
+                for (const warehouse in usedWarehouses)
+                    html += `<th>${usedWarehouses[warehouse]}</th>`
+                html += '</tr></thead><tbody>'
+                for (const size in stock) {
+                    let row = `<tr><td>${size}</td>`
+                    for (const warehouse in usedWarehouses) {
+                        const check = parseInt(stock[size][warehouse])
+                            ? `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>`
+                            : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`
+                        row += `<td data-in-stock="${stock[size][warehouse] || 0}">${check}</td>`
+                    }
+                    row += '</tr>'
+                    html += row
+                }
+                html += '</tbody></table>'
+                return html
+            }
 
-      if (skuMeta) {
-        const sku = skuMeta.textContent.trim()
-        const data = await fetchStock(sku)
+            const skuMeta = document.querySelector('[itemprop=sku]')
 
-        if (!data?.stock || !Object.keys(data.stock).length)
-          return
+            if (skuMeta) {
+                const sku = skuMeta.textContent.trim()
+                const data = await fetchStock(sku)
 
-        const div = document.createElement('div')
-        div.className = 'stock'
-        div.innerHTML = jsonToTable(data)
-        document.querySelector('div.js-store-product.js-product.t-store__product-snippet > div.t-container').appendChild(div)
-      }
-    })
-  })()
+                if (!data?.stock || !Object.keys(data.stock).length)
+                    return
+
+                const div = document.createElement('div')
+                div.className = 'stock'
+                div.innerHTML = jsonToTable(data)
+                document.querySelector('div.js-store-product.js-product.t-store__product-snippet > div.t-container').appendChild(div)
+            }
+        })
+    })()
 </script>
