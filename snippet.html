@@ -1,48 +1,10 @@
-<style>
-    .stock {
-        float: left;
-        width: 100%;
-        padding: 40px 20px;
-        font-size: 14px;
-        font-family: 'TildaSans',Arial,sans-serif;
-        overflow-x: auto;
-        box-sizing: border-box;
-    }
-    .stock > table {
-        border-collapse: separate;
-        border-spacing: 0;
-        width: 100%;
-        box-sizing: border-box;
-        border-radius: 8px;
-        overflow: hidden;
-        border: solid var(--brand-primary) 1px;
-        color: var(--brand-primary);
-        line-height: 24px;
-    }
-    .stock > table th {
-        background-color: var(--brand-primary);
-        color: #ffffff;
-        border-top: none;
-    }
-    .stock > table td,
-    .stock > table th  {
-        text-align: center;
-        padding: 8px;
-        white-space: nowrap;
-        border-left: solid var(--brand-primary) 1px;
-        border-top: solid var(--brand-primary) 1px;
-    }
-    .stock > table tr td:first-child,
-    .stock > table tr th:first-child {
-        text-align: left;
-        border-left: none;
-    }
-    .stock > table tr td[data-in-stock='0'] {
-        color: #adadad;
-    }
-</style>
+<!--Скрипт инжекта попапа остатков-->
+
+<div class="stock">Нет информации о наличии :(</div>
+
 <script>
     (function () {
+        // Ожидание окончания загрузки страницы (стырено из скриптов Nolim)
         function t_ready(e) {
             document.readyState !== 'loading'
                 ? e()
@@ -52,66 +14,110 @@
                         document.readyState !== 'loading' && e()
                     })
         }
+
+        // Скачивание информации об остатках - https://github.com/skhrvg/alpaka-stock
+        function fetchStock(sku) {
+            return fetch(`https://services.alpakastory.ru/stock?${new URLSearchParams({ sku })}`)
+                .then((response) => {
+                    return response.json()
+                })
+                .catch(() => {
+                    return {}
+                })
+        }
+
+        // Преобразование JSON остатков в таблицу
+        function jsonToTable(json) {
+            const warehouses = Object.keys(json.warehouses)
+            const usedWarehouses = {}
+            const stock = Object.keys(json.stock).sort().reduce(
+                (obj, key) => {
+                    obj[key] = json.stock[key];
+                    return obj;
+                },
+                {}
+            );
+            for (const size in stock) {
+                for (const warehouse of warehouses) {
+                    if (stock[size][warehouse])
+                        usedWarehouses[warehouse] = json.warehouses[warehouse]
+                }
+            }
+            let html = '<table><thead><tr><th>Размер / Магазин</th>'
+            for (const warehouse in usedWarehouses)
+                html += `<th>${usedWarehouses[warehouse]}</th>`
+            html += '</tr></thead><tbody>'
+            for (const size in stock) {
+                let row = `<tr><td>${size}</td>`
+                for (const warehouse in usedWarehouses) {
+                    const icon = parseInt(stock[size][warehouse])
+                        ? `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>`
+                        : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>`
+                    row += `<td data-in-stock="${stock[size][warehouse] || 0}">${icon}</td>`
+                }
+                row += '</tr>'
+                html += row
+            }
+            html += '</tbody></table>'
+            return html
+        }
+
+
+        // Основной скрипт
         t_ready(async () => {
-            function fetchStock(sku) {
-                return fetch(`https://services.alpakastory.ru/stock?${new URLSearchParams({ sku })}`)
-                    .then((response) => {
-                        return response.json()
-                    })
-                    .catch(() => {
-                        return {}
-                    })
-            }
-
-            function jsonToTable(json) {
-                const warehouses = Object.keys(json.warehouses)
-                const usedWarehouses = {}
-                const stock = Object.keys(json.stock).sort().reduce(
-                    (obj, key) => {
-                        obj[key] = json.stock[key];
-                        return obj;
-                    },
-                    {}
-                );
-                for (const size in stock) {
-                    for (const warehouse of warehouses) {
-                        if (stock[size][warehouse])
-                            usedWarehouses[warehouse] = json.warehouses[warehouse]
-                    }
-                }
-                let html = '<table><thead><tr><th></th>'
-                for (const warehouse in usedWarehouses)
-                    html += `<th>${usedWarehouses[warehouse]}</th>`
-                html += '</tr></thead><tbody>'
-                for (const size in stock) {
-                    let row = `<tr><td>${size}</td>`
-                    for (const warehouse in usedWarehouses) {
-                        const check = parseInt(stock[size][warehouse])
-                            ? `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>`
-                            : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`
-                        row += `<td data-in-stock="${stock[size][warehouse] || 0}">${check}</td>`
-                    }
-                    row += '</tr>'
-                    html += row
-                }
-                html += '</tbody></table>'
-                return html
-            }
-
+            // Элемент содержащий артикул
             const skuMeta = document.querySelector('[itemprop=sku]')
+            // Если его нет, считаем, что мы не на странице товара и завершаем работу
+            if (!skuMeta)
+                return
+            // Получаем непосредственно сам артикул
+            const sku = skuMeta.textContent.trim()
+            // Скачиваем данные об остатках
+            const data = await fetchStock(sku)
+            // Если их нет, завершаем работу
+            if (!data?.stock || !Object.keys(data.stock).length)
+                return
+            // Вставляем таблицу в попап
+            document.querySelector('.stock').innerHTML = jsonToTable(data)
+            // Вставляем ссылку на попап
+            document.querySelector('.t-store__prod-popup__links-wrapper').innerHTML = '<a href="#popup:stock" class="stock-link">Наличие в магазинах</a>'
 
-            if (skuMeta) {
-                const sku = skuMeta.textContent.trim()
-                const data = await fetchStock(sku)
-
-                if (!data?.stock || !Object.keys(data.stock).length)
-                    return
-
-                const div = document.createElement('div')
-                div.className = 'stock'
-                div.innerHTML = jsonToTable(data)
-                document.querySelector('div.js-store-product.js-product.t-store__product-snippet > div.t-container').appendChild(div)
-            }
         })
     })()
 </script>
+
+<style>
+    .stock, .stock-link {
+        font-size: 14px;
+        font-family: 'TildaSans',Arial,sans-serif;
+    }
+    .stock {
+        width: 100%;
+        padding: 30px 20px;
+        overflow-x: auto;
+        box-sizing: border-box;
+    }
+    .stock > table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+    .stock > table th {
+        line-height: 24px;
+    }
+    .stock > table td,
+    .stock > table th  {
+        text-align: center;
+        padding: 8px;
+        white-space: nowrap;
+    }
+    .stock > table tr td:first-child,
+    .stock > table tr th:first-child {
+        text-align: left;
+    }
+    .stock > table tr td[data-in-stock='0'] {
+        color: #adadad;
+    }
+</style>
