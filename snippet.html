@@ -62,30 +62,60 @@
             return html
         }
 
+        function err(message, noDevAlert) {
+            if (localStorage.getItem('dev') && !noDevAlert)
+                alert(message)
+            console.error('[Stock Script] ' + message)
+        }
+
+        function warn(message) {
+            console.warn('[Stock Script] ' + message)
+        }
+
 
         // Основной скрипт
         t_ready(async () => {
             // Элемент содержащий артикул
-            const skuMeta = document.querySelector('[itemprop=sku]')
+            const skuEl = document.querySelector('[itemprop=sku]')
             // Если его нет, считаем, что мы не на странице товара и завершаем работу
-            if (!skuMeta)
+            if (!skuEl) {
+                warn('Failed to find SKU element. You\'re not on the store item page, probably' )
                 return
+            }
             // Получаем непосредственно сам артикул
-            const sku = skuMeta.textContent.trim()
+            const sku = skuEl.content?.trim() || skuEl.textContent?.trim()
+            if (!sku) {
+                err('Failed to find SKU')
+                return
+            }
+            // Элемент, куда будем вставлять результат работы скрипта
+            const stockEl = document.querySelector('.stock')
+            if (!stockEl) {
+                err('Failed to find stock element')
+                return
+            }
+            // Элемент ссылок в карточке товара
+            const linksEl = document.querySelector('.t-store__prod-popup__links-wrapper')
+            if (!linksEl) {
+                err('Failed to find links element')
+                return
+            }
+            // Вставляем ссылку на попап
+            linksEl.innerHTML += '<a href="#popup:stock" class="stock-link">Наличие в магазинах</a>'
             // Скачиваем данные об остатках
             const data = await fetchStock(sku)
-            // Если их нет, завершаем работу
-            if (!data?.stock || !Object.keys(data.stock).length)
+            if (!data?.stock) {
+                err('Failed to fetch data')
                 return
+            }
+            if (!Object.keys(data.stock).length) {
+                warn('No stock data')
+            }
             // Вставляем таблицу в попап
-            document.querySelector('.stock').innerHTML = jsonToTable(data)
-            // Вставляем ссылку на попап
-            document.querySelector('.t-store__prod-popup__links-wrapper').innerHTML = '<a href="#popup:stock" class="stock-link">Наличие в магазинах</a>'
-
+            stockEl.innerHTML = jsonToTable(data)
         })
     })()
 </script>
-
 <style>
     .stock, .stock-link {
         font-size: 14px;
